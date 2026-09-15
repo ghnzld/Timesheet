@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Consulting Admin v2.0-google-auth — 02 Sep 2026</title>
+<title>Consulting Admin v2.1-google-auth — 15 Sep 2026</title>
 <style>
   :root{
     --ink:#1b2430;
@@ -200,7 +200,7 @@
 <div id="app">
 
   <header class="topbar">
-    <div class="brand">Consulting Admin<small>v2.0-google-auth — 02 Sep 2026 · timesheets · expenses · invoicing</small></div>
+    <div class="brand">Consulting Admin<small>v2.1-google-auth — 15 Sep 2026 · timesheets · expenses · invoicing</small></div>
     <div class="sync" id="syncStatus">loading…</div>
   </header>
 
@@ -454,6 +454,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.14.0/html2pdf.bundle.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyAnkGxBhWAPFR-oxEMdHl2FioYhLWVPgkI",
@@ -2279,9 +2280,11 @@ function buildQuotationDocHtml(q, isPreview){
 }
 function openQuotationDoc(id){
   const q = DB.quotations.find(x=>x.id===id);
+  const title = (q.number||'DRAFT')+' Quotation';
   const html = buildQuotationDocHtml(q, false) + `
     <div class="noprint" style="text-align:center;margin-top:16px;">
-      <button class="btn accent" onclick="printWithTitle('${(q.number||'DRAFT')} Quotation')">Print / save as PDF</button>
+      <button class="btn accent" onclick="printWithTitle('${title}')">Print</button>
+      <button class="btn accent" onclick="downloadAsPdf('${title}')">Save as PDF</button>
       <button class="btn secondary" onclick="closeModal()">Close</button>
     </div>
   `;
@@ -2295,7 +2298,8 @@ function previewQuotationDoc(){
   const previewQ = {...d, subtotal, vatRate:DB.settings.vatRate, vatAmount, total};
   const html = buildQuotationDocHtml(previewQ, true) + `
     <div class="noprint" style="text-align:center;margin-top:16px;">
-      <button class="btn accent" onclick="window.print()">Print / save as PDF</button>
+      <button class="btn accent" onclick="window.print()">Print</button>
+      <button class="btn accent" onclick="downloadAsPdf('DRAFT Quotation')">Save as PDF</button>
       <button class="btn secondary" onclick="closeModal()">Back to draft</button>
     </div>
   `;
@@ -2498,6 +2502,27 @@ function printWithTitle(title){
   setTimeout(()=>{ document.title = prevTitle; }, 800);
 }
 
+// Generates and downloads a real PDF file directly — no print dialog, no
+// printer reconfiguration needed. Renders whatever's in the given container
+// (default: the open modal); .noprint elements (draft banners, action
+// buttons) are excluded even though html2canvas doesn't honour @media print.
+function downloadAsPdf(filename, containerSelector){
+  const root = document.querySelector(containerSelector||'#modalContent');
+  if(!root){ showToast('Nothing to save'); return; }
+  showToast('Generating PDF…');
+  html2pdf().set({
+    margin: 0,
+    filename: filename.endsWith('.pdf') ? filename : filename+'.pdf',
+    image: { type:'jpeg', quality:0.98 },
+    html2canvas: { scale:2, ignoreElements: el=>el.classList && el.classList.contains('noprint') },
+    jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+    pagebreak: { mode:['css'] }
+  }).from(root).save().then(()=>showToast('PDF saved')).catch(err=>{
+    console.error('PDF generation failed', err);
+    showToast('PDF generation failed — try Print instead');
+  });
+}
+
 // Unified print/export panel for a POSTED invoice — tick which documents to
 // include, combine into one PDF or step through them separately, and the
 // filename shown in the browser's "Save as PDF" dialog is set automatically
@@ -2540,7 +2565,7 @@ function openPrintPanel(invoiceId, sel){
         ${folderBtn}
         <button class="btn secondary" onclick="closeModal()">Close</button>
       </div>
-      <p class="helptext" style="margin-top:8px;">Filenames follow the invoice number automatically when you choose "Save as PDF" in the print dialog — e.g. ${invoiceDocFileTitle(inv,'Invoice')}.pdf.</p>
+      <p class="helptext" style="margin-top:8px;">"Save as PDF" downloads the file directly — no printer reconfiguration needed. Filenames follow the invoice number, e.g. ${invoiceDocFileTitle(inv,'Invoice')}.pdf.</p>
     </div>
     ${contentHtml}
   `;
@@ -2566,7 +2591,7 @@ function openPrintPanel(invoiceId, sel){
     actionArea.innerHTML = parts.map(p=>{
       const label = p==='invoice'?'Invoice':p==='timesheet'?'Timesheet detail':'Expense detail';
       const only = {invoice:p==='invoice', timesheet:p==='timesheet', expenses:p==='expenses', combined:true};
-      return `<button class="btn secondary" onclick='openPrintPanel("${invoiceId}", ${JSON.stringify(only)})'>Print ${label}</button>`;
+      return `<button class="btn secondary" onclick='openPrintPanel("${invoiceId}", ${JSON.stringify(only)})'>View / save ${label}</button>`;
     }).join('');
   } else if(selectedCount>0){
     let suffix;
@@ -2574,8 +2599,11 @@ function openPrintPanel(invoiceId, sel){
     else if(sel.invoice) suffix = 'Invoice';
     else if(sel.timesheet) suffix = 'Timesheet';
     else suffix = 'Expenses';
-    actionArea.innerHTML = `<button class="btn accent" id="printGoBtn">Print / Save as PDF</button>`;
+    actionArea.innerHTML = `
+      <button class="btn accent" id="printGoBtn">Print</button>
+      <button class="btn accent" id="pdfGoBtn">Save as PDF</button>`;
     document.getElementById('printGoBtn').onclick = ()=> printWithTitle(invoiceDocFileTitle(inv, suffix));
+    document.getElementById('pdfGoBtn').onclick = ()=> downloadAsPdf(invoiceDocFileTitle(inv, suffix));
   } else {
     actionArea.innerHTML = '';
   }
@@ -2600,7 +2628,8 @@ function previewInvoiceDoc(){
   const previewInv = {...d, subtotal, vatRate:DB.settings.vatRate, vatAmount, total};
   const html = buildInvoiceDocHtml(previewInv, true) + `
     <div class="noprint" style="text-align:center;margin-top:16px;">
-      <button class="btn accent" onclick="window.print()">Print / save as PDF</button>
+      <button class="btn accent" onclick="window.print()">Print</button>
+      <button class="btn accent" onclick="downloadAsPdf('DRAFT Invoice')">Save as PDF</button>
       <button class="btn secondary" onclick="openTimesheetAttachment('${d.id}')">Timesheet detail</button>
       <button class="btn secondary" onclick="openExpenseAttachment('${d.id}')">Expense detail</button>
       <button class="btn secondary" onclick="closeModal()">Back to draft</button>
@@ -2621,7 +2650,8 @@ function openTimesheetAttachment(invoiceId){
     </div>
     ${buildTimesheetAttachmentHtml(inv)}
     <div class="noprint" style="text-align:center;margin-top:16px;">
-      <button class="btn accent" onclick="printWithTitle('${invoiceDocFileTitle(inv,'Timesheet')}')">Print / save as PDF</button>
+      <button class="btn accent" onclick="printWithTitle('${invoiceDocFileTitle(inv,'Timesheet')}')">Print</button>
+      <button class="btn accent" onclick="downloadAsPdf('${invoiceDocFileTitle(inv,'Timesheet')}')">Save as PDF</button>
       <button class="btn secondary" onclick="openInvoiceDoc('${inv.id}')">Back to invoice</button>
       <button class="btn secondary" onclick="closeModal()">Close</button>
     </div>
@@ -2637,7 +2667,8 @@ function openExpenseAttachment(invoiceId){
   const inv = DB.invoices.find(i=>i.id===invoiceId);
   const html = buildExpenseAttachmentHtml(inv) + `
     <div class="noprint" style="text-align:center;margin-top:16px;">
-      <button class="btn accent" onclick="printWithTitle('${invoiceDocFileTitle(inv,'Expenses')}')">Print / save as PDF</button>
+      <button class="btn accent" onclick="printWithTitle('${invoiceDocFileTitle(inv,'Expenses')}')">Print</button>
+      <button class="btn accent" onclick="downloadAsPdf('${invoiceDocFileTitle(inv,'Expenses')}')">Save as PDF</button>
       <button class="btn secondary" onclick="openInvoiceDoc('${inv.id}')">Back to invoice</button>
       <button class="btn secondary" onclick="closeModal()">Close</button>
     </div>
