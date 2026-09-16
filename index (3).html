@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Log Time & Expenses v4.1-google-auth — 15 Sep 2026</title>
+<style>
+  :root{
+    --ink:#1b2430; --ink-soft:#4a5568; --panel:#ffffff; --bg:#eef1f4; --line:#d7dde3;
+    --accent:#b5651d; --accent-ink:#7a4213; --warn:#8a5a00; --warn-bg:#fbf1de;
+    --mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+    --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif; --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:17px; line-height:1.45;}
+  input,select,textarea{font-size:17px; padding:15px 13px; width:100%; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink);}
+  textarea{resize:vertical; min-height:44px;}
+  label{display:block; font-size:14px; color:var(--ink-soft); margin-bottom:5px; font-weight:600;}
+  .field{margin-bottom:18px;}
+  button.btn{border:1px solid var(--ink); background:var(--ink); color:#fff; padding:17px 18px; border-radius:6px; font:inherit; font-weight:700; font-size:17px; cursor:pointer;}
+  button.btn.secondary{background:#fff; color:var(--ink); border-color:var(--line);}
+  button.btn.accent{background:var(--accent); border-color:var(--accent-ink);}
+  button.btn.small{padding:11px 15px; font-size:15px;}
+  button.btn:disabled{opacity:.45; cursor:default;}
+  html{-webkit-text-size-adjust:100%;}
+  body{padding-bottom:env(safe-area-inset-bottom);}
+  header.topbar{background:var(--ink); color:#fff; padding:calc(env(safe-area-inset-top) + 12px) 18px 14px;}
+  header.topbar .brand{font-weight:600; font-size:15px;}
+  header.topbar small{display:block; font-weight:400; color:#b9c2cc; font-size:11px; margin-top:2px; white-space:normal;}
+  nav.screens{display:flex; justify-content:center; padding:8px 12px; background:var(--bg);}
+  nav.screens .seg{display:flex; background:#dde3e9; border-radius:9px; padding:2px; width:100%; max-width:360px;}
+  nav.screens button{flex:1; border:none; background:transparent; color:var(--ink-soft); padding:12px 6px; font:inherit; font-weight:700; font-size:15px; border-radius:7px; white-space:nowrap;}
+  nav.screens button.active{color:var(--ink); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  main{padding:0 14px 14px; width:100%; max-width:100%; margin:0 auto;}
+  section.view{display:none;}
+  section.view.active{display:block;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; margin-bottom:16px;}
+  .today-hero{background:var(--ink); color:#fff; border-radius:8px; padding:20px; margin-bottom:16px;}
+  .today-hero .date{font-size:12px; color:#b9c2cc; text-transform:uppercase; letter-spacing:.5px;}
+  .today-hero .total{font-family:var(--mono); font-size:32px; margin:6px 0 0; font-weight:700;}
+  .entry-row{border:1px solid var(--line); border-radius:var(--radius); padding:10px; margin-bottom:8px; background:#fbfbfc;}
+  .entry-row .meta{display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); margin-bottom:2px;}
+  .entry-row .amt{font-family:var(--mono); font-weight:700; margin-top:4px;}
+  .empty{padding:20px 10px; text-align:center; color:var(--ink-soft); font-size:13px; border:1px dashed var(--line); border-radius:var(--radius);}
+  .helptext{font-size:12px; color:var(--ink-soft); margin-top:4px;}
+  .toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px; font-size:13px; opacity:0; pointer-events:none; transition:opacity .25s; z-index:99;}
+  .toast.show{opacity:1;}
+  .modal-bg{position:fixed; inset:0; background:rgba(20,25,32,.55); display:none; align-items:flex-start; justify-content:center; padding:24px 14px; overflow-y:auto; z-index:50;}
+  .modal-bg.show{display:flex;}
+  .modal{background:#fff; border-radius:var(--radius); padding:20px; width:100%; max-width:420px; margin-top:20px;}
+  .modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px;}
+  .time-picker-btn{font-family:var(--mono); min-width:120px; text-align:center; font-size:17px;}
+  .time-wheel-picker{position:relative; display:flex; justify-content:center; align-items:center; gap:10px; margin:16px 0;}
+  .time-wheel-picker .wheel-col{height:180px; width:66px; overflow-y:scroll; scroll-snap-type:y mandatory; -webkit-overflow-scrolling:touch;}
+  .time-wheel-picker .wheel-col::-webkit-scrollbar{display:none;}
+  .time-wheel-picker .wheel-pad{height:72px;}
+  .time-wheel-picker .wheel-item{height:36px; line-height:36px; text-align:center; scroll-snap-align:center; font-family:var(--mono); font-size:17px; color:var(--ink-soft);}
+  .time-wheel-picker .wheel-item.selected{color:var(--ink); font-weight:700; font-size:19px;}
+  .time-wheel-picker .wheel-colon{font-size:20px; font-weight:700; color:var(--ink-soft);}
+  .time-wheel-picker .wheel-highlight{position:absolute; left:0; right:0; top:50%; height:36px; margin-top:-18px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); pointer-events:none; background:rgba(0,0,0,.025);}
+  .sync-note{font-size:11px; color:#b9c2cc; margin-top:2px;}
+</style>
+</head>
+<body>
+<div id="signInGate" style="display:none; min-height:100vh; align-items:center; justify-content:center; flex-direction:column; gap:16px; background:var(--bg); padding:20px; text-align:center;">
+  <div style="font-size:18px; font-weight:700;">Log Time &amp; Expenses</div>
+  <p style="color:var(--ink-soft); max-width:280px; margin:0;">Sign in with the account this data belongs to.</p>
+  <button class="btn accent" id="signInBtn">Sign in with Google</button>
+  <p id="signInError" class="helptext" style="color:var(--bad); display:none;"></p>
+</div>
+<div id="app">
+<header class="topbar">
+  <div class="brand">Log Time &amp; Expenses<small id="syncStatus">loading…</small></div>
+</header>
+<nav class="screens" id="screens">
+  <div class="seg">
+    <button data-view="time" class="active">Time</button>
+    <button data-view="expense">Expense</button>
+  </div>
+</nav>
+<main>
+  <section class="view active" id="view-time">
+    <div class="today-hero">
+      <div class="date" id="todayDate"></div>
+      <div class="total" id="todayTotal">0h 00m</div>
+    </div>
+    <div class="card"><div id="timeForm"></div></div>
+    <div class="card"><h3 style="margin:0 0 10px; font-size:13px; text-transform:uppercase; color:var(--ink-soft);">Today's entries</h3><div id="todayEntries"></div></div>
+  </section>
+  <section class="view" id="view-expense">
+    <div class="card"><div id="expenseForm"></div></div>
+    <div class="card"><h3 style="margin:0 0 10px; font-size:13px; text-transform:uppercase; color:var(--ink-soft);">Today's expenses</h3><div id="todayExpenses"></div></div>
+  </section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalContent"></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script>
+  // Classic (non-module) compat SDK — the modular/ES-import build is
+  // unreliable when this file is opened locally on iOS Safari/WebKit,
+  // which silently fails to load the module at all.
+  const firebaseConfig = {
+    apiKey: "AIzaSyAnkGxBhWAPFR-oxEMdHl2FioYhLWVPgkI",
+    authDomain: "hansen-eng-timesheets.firebaseapp.com",
+    projectId: "hansen-eng-timesheets",
+    storageBucket: "hansen-eng-timesheets.firebasestorage.app",
+    messagingSenderId: "128592776656",
+    appId: "1:128592776656:web:d4ac96396c3f05ea857dd5"
+  };
+  const SPACE_ID = 'hansen-eng-69ac6e6dd0f6c8ad0c2a701b6aa40ace';
+
+  firebase.initializeApp(firebaseConfig);
+  const fbAuth = firebase.auth();
+  const fbDb = firebase.firestore();
+  function docRef(key){ return fbDb.collection('spaces').doc(SPACE_ID).collection('store').doc(key); }
+
+  window.cloudStore = {
+    status: 'connecting',
+    async get(key){
+      const snap = await docRef(key).get();
+      return snap.exists ? snap.data().value : undefined;
+    },
+    async set(key, value){
+      await docRef(key).set({ value, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    },
+    subscribe(key, callback){
+      return docRef(key).onSnapshot(snap=>{
+        if(snap.exists) callback(snap.data().value);
+      }, err=>console.error('cloudStore subscribe error', key, err));
+    },
+    signIn(){
+      return fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    },
+    signOut(){
+      return fbAuth.signOut();
+    }
+  };
+
+  fbAuth.onAuthStateChanged(user=>{
+    if(user){
+      window.cloudStore.status = 'connected';
+      window.cloudStore.userEmail = user.email;
+      window.dispatchEvent(new CustomEvent('cloudStoreReady'));
+    } else {
+      window.cloudStore.status = 'signed-out';
+      window.dispatchEvent(new CustomEvent('cloudStoreReady'));
+    }
+  }, err=>{
+    window.cloudStore.status = 'error';
+    console.error('auth state error', err);
+    window.dispatchEvent(new CustomEvent('cloudStoreReady'));
+  });
+</script>
+<script>
+/* ============================================================
+   Synced live via Firestore — same account/space as the PC app.
+   Projects/clients appear automatically; anything logged here
+   shows up on the PC within seconds, no export/import needed.
+   ============================================================ */
+const STORE_KEYS = ['clients','projects','timesheet','expenses','settings','activeTimer'];
+let DB = { clients:[], projects:[], timesheet:[], expenses:[], settings:{halfDayThreshold:4, currencies:['CHF','EUR','USD','GBP','HUF'], exchangeRates:{}}, activeTimer:null };
+let storageOk = true;
+let liveSubscriptions = {};
+
+async function loadAll(){
+  const syncEl = document.getElementById('syncStatus');
+  if(window.cloudStore && window.cloudStore.status==='connected'){
+    storageOk = true;
+    for(const key of STORE_KEYS){
+      try{
+        const val = await window.cloudStore.get(key);
+        if(val !== undefined) DB[key] = val;
+      }catch(e){ console.error('cloud read failed for', key, e); }
+    }
+    syncEl.textContent = 'synced live — ' + (window.cloudStore.userEmail||'');
+    subscribeToLiveUpdates();
+  } else {
+    storageOk = false;
+    syncEl.textContent = '⚠ cloud sync unavailable — check connection';
+  }
+  if(!DB.settings) DB.settings = {};
+  if(DB.settings.halfDayThreshold===undefined) DB.settings.halfDayThreshold = 4;
+  if(!DB.settings.currencies) DB.settings.currencies = ['CHF','EUR','USD','GBP','HUF'];
+  if(!DB.settings.exchangeRates) DB.settings.exchangeRates = {};
+}
+function subscribeToLiveUpdates(){
+  STORE_KEYS.forEach(key=>{
+    if(liveSubscriptions[key]) return;
+    liveSubscriptions[key] = window.cloudStore.subscribe(key, (val)=>{
+      DB[key] = val;
+      if(key==='timesheet') renderTimeView();
+      if(key==='expenses') renderExpenseView();
+    });
+  });
+}
+async function saveKey(){
+  if(!storageOk) return;
+  try{ await Promise.all(STORE_KEYS.map(k=>window.cloudStore.set(k, DB[k]))); }
+  catch(e){ console.error('cloud save failed', e); showToast('Save failed — check connection'); }
+}
+
+/* ---- shared utils (kept identical to the main app) ---- */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtMoney(n, ccy){ return (ccy||'') + ' ' + (Math.round((n+Number.EPSILON)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtHours(h){ const hh=Math.floor(h); const mm=Math.round((h-hh)*60); return hh+'h '+String(mm).padStart(2,'0')+'m'; }
+function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function nowHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function timeDiffHours(s,e){
+  if(!s||!e) return null;
+  const [sh,sm]=s.split(':').map(Number), [eh,em]=e.split(':').map(Number);
+  let mins=(eh*60+em)-(sh*60+sm); if(mins<0) mins+=24*60;
+  return Math.round((mins/60)*100)/100;
+}
+function clientById(id){ return DB.clients.find(c=>c.id===id); }
+function projectById(id){ return DB.projects.find(p=>p.id===id); }
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(showToast._h); showToast._h=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function openModal(html){ document.getElementById('modalContent').innerHTML=html; document.getElementById('modalBg').classList.add('show'); }
+function closeModal(){ document.getElementById('modalBg').classList.remove('show'); }
+document.getElementById('modalBg').addEventListener('click', e=>{ if(e.target.id==='modalBg') closeModal(); });
+
+/* ---- billing math — identical to the main app, so previewed
+   amounts here always match what the PC will actually bill ---- */
+function billingUnitsForHours(hours, threshold){ return hours<=threshold ? 0.5 : 1.0; }
+function computeAllocatedDaysMap(clientId, dateStr){
+  const relevant = DB.timesheet.filter(t=>t.clientId===clientId && t.date===dateStr && (t.billingType==='daily'||t.billingType==='travel'));
+  const totalHours = relevant.reduce((s,t)=>s+Number(t.hours||0),0);
+  const threshold = DB.settings.halfDayThreshold || 4;
+  const cappedDays = totalHours>0 ? billingUnitsForHours(totalHours, threshold) : 0;
+  const map = {};
+  if(totalHours<=0 || relevant.length===0) return map;
+  const units = Math.round(cappedDays*100);
+  const shares = relevant.map(t=>{ const exact=units*(Number(t.hours||0)/totalHours); return {id:t.id, base:Math.floor(exact), remainder:exact-Math.floor(exact)}; });
+  let remaining = units - shares.reduce((s,x)=>s+x.base,0);
+  [...shares].sort((a,b)=>b.remainder-a.remainder).slice(0,remaining).forEach(s=>{ s.base+=1; });
+  shares.forEach(s=>{ map[s.id]=s.base/100; });
+  return map;
+}
+function calcEntryAmount(entry, project){
+  if(!project) return {amount:0, currency:'', unitLabel:''};
+  const ccy = project.currency;
+  if(entry.billingType==='hourly'){
+    return {amount: entry.hours*(project.rates.hourly||0), currency:ccy, unitLabel: entry.hours.toFixed(2)+' h'};
+  }
+  const allocMap = computeAllocatedDaysMap(entry.clientId, entry.date);
+  const days = allocMap[entry.id] ?? 0;
+  let rate = entry.billingType==='daily' ? (project.rates.daily||0) : (project.rates.travel||0);
+  let amt = days*rate;
+  if(entry.billingType==='travel' && project.includeAllowance) amt += days*(project.rates.allowance||0);
+  return {amount:amt, currency:ccy, unitLabel: days.toFixed(2)+' day'+(days===1?'':'s'), days};
+}
+function officialCrossRate(fromCcy, toCcy, monthStr){
+  const rates = DB.settings.exchangeRates[monthStr];
+  if(!rates || !(fromCcy in rates) || !(toCcy in rates)) return null;
+  return rates[fromCcy]/rates[toCcy];
+}
+function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : ''; }
+
+/* ---- project combo + currency picker (identical to main app) ---- */
+function projectComboOptionsHtml(selected){
+  return ['<option value="">Select project…</option>']
+    .concat(DB.projects.filter(p=>{ const c=clientById(p.clientId); return c && c.active!==false; })
+      .map(p=>{ const c=clientById(p.clientId); return `<option value="${p.id}" ${p.id===selected?'selected':''}>${escapeHtml(c.name)} — ${escapeHtml(p.name)}</option>`; }))
+    .join('');
+}
+function currencyOptionsHtml(selected){
+  return (DB.settings.currencies||[]).map(cur=>`<option value="${cur}" ${cur===selected?'selected':''}>${cur}</option>`).join('')
+    + `<option value="__add__">+ Add new currency…</option>`;
+}
+function wireCurrencyAdd(selectEl){
+  selectEl.addEventListener('change', ()=>{
+    if(selectEl.value==='__add__'){
+      const prev = DB.settings.currencies[0]||'';
+      selectEl.value = prev;
+      openAddCurrencyModal(newCode=>{ selectEl.innerHTML = currencyOptionsHtml(newCode); });
+    }
+  });
+}
+function openAddCurrencyModal(onAdded){
+  openModal(`
+    <h3>Add a currency</h3>
+    <div class="field"><label>3-letter code (ISO 4217)</label><input id="newCcyCode" maxlength="3" style="text-transform:uppercase;" placeholder="e.g. HUF"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn accent" id="confirmAddCcyBtn">Add</button>
+    </div>`);
+  document.getElementById('confirmAddCcyBtn').onclick = ()=>{
+    const code = document.getElementById('newCcyCode').value.trim().toUpperCase();
+    if(!/^[A-Z]{3}$/.test(code)){ showToast('Enter a 3-letter currency code'); return; }
+    if(!DB.settings.currencies.includes(code)){ DB.settings.currencies.push(code); DB.settings.currencies.sort(); saveKey(); }
+    closeModal(); onAdded(code); showToast('Currency added: '+code);
+  };
+}
+function descriptionOptionsHtml(){
+  const seen = new Map();
+  [...DB.timesheet].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{ if(t.description && !seen.has(t.description)) seen.set(t.description,true); });
+  return [...seen.keys()].slice(0,40).map(d=>`<option value="${escapeHtml(d)}">`).join('');
+}
+
+/* ---- 24h wheel time picker (identical to main app) ---- */
+function timeSelectHtml(idPrefix, hhmm){
+  return `<button type="button" class="btn secondary time-picker-btn" id="${idPrefix}Btn" data-value="${hhmm||''}">${hhmm||'Set time'}</button>`;
+}
+function readTimeSelect(idPrefix){ const b=document.getElementById(idPrefix+'Btn'); return b?(b.dataset.value||''):''; }
+function setTimeSelect(idPrefix, hhmm){ const b=document.getElementById(idPrefix+'Btn'); if(b){ b.dataset.value=hhmm||''; b.textContent=hhmm||'Set time'; } }
+function wireTimeSelectChange(idPrefix, cb){
+  const b=document.getElementById(idPrefix+'Btn'); if(!b) return;
+  b.addEventListener('click', ()=>{ openTimeWheelPicker(b.dataset.value, newVal=>{ setTimeSelect(idPrefix,newVal); if(cb) cb(); }); });
+}
+const WHEEL_ITEM_H = 36;
+function wheelColHtml(count){ return `<div class="wheel-pad"></div>${Array.from({length:count},(_,i)=>`<div class="wheel-item" data-val="${i}">${String(i).padStart(2,'0')}</div>`).join('')}<div class="wheel-pad"></div>`; }
+function attachWheelHighlight(col){
+  function update(){
+    const center = col.scrollTop + col.clientHeight/2;
+    col.querySelectorAll('.wheel-item').forEach(it=>{ const mid=it.offsetTop+it.offsetHeight/2; it.classList.toggle('selected', Math.abs(mid-center)<WHEEL_ITEM_H/2); });
+  }
+  col.addEventListener('scroll', update); update();
+}
+function openTimeWheelPicker(currentHHMM, onConfirm){
+  const parts=(currentHHMM||'').split(':');
+  const curH = parts[0]!==undefined&&parts[0]!=='' ? parseInt(parts[0],10) : new Date().getHours();
+  const curM = parts[1]!==undefined&&parts[1]!=='' ? parseInt(parts[1],10) : Math.round(new Date().getMinutes()/5)*5%60;
+  openModal(`
+    <h3>Set time (24h)</h3>
+    <div class="time-wheel-picker">
+      <div class="wheel-highlight"></div>
+      <div class="wheel-col" id="wheelHourCol">${wheelColHtml(24)}</div>
+      <div class="wheel-colon">:</div>
+      <div class="wheel-col" id="wheelMinCol">${wheelColHtml(60)}</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn accent" id="wheelConfirmBtn">Set</button>
+    </div>`);
+  const hourCol=document.getElementById('wheelHourCol'), minCol=document.getElementById('wheelMinCol');
+  hourCol.scrollTop = curH*WHEEL_ITEM_H; minCol.scrollTop = curM*WHEEL_ITEM_H;
+  attachWheelHighlight(hourCol); attachWheelHighlight(minCol);
+  document.getElementById('wheelConfirmBtn').onclick = ()=>{
+    const h=Math.min(23,Math.max(0,Math.round(hourCol.scrollTop/WHEEL_ITEM_H)));
+    const m=Math.min(59,Math.max(0,Math.round(minCol.scrollTop/WHEEL_ITEM_H)));
+    const result = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    closeModal(); onConfirm(result);
+  };
+}
+
+/* ============================================================
+   SCREEN SWITCHING
+   ============================================================ */
+document.getElementById('screens').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-view]'); if(!btn) return;
+  document.querySelectorAll('nav.screens button').forEach(b=>b.classList.toggle('active', b===btn));
+  document.querySelectorAll('section.view').forEach(s=>s.classList.toggle('active', s.id==='view-'+btn.dataset.view));
+  if(btn.dataset.view==='time') renderTimeView();
+  if(btn.dataset.view==='expense') renderExpenseView();
+});
+
+/* ============================================================
+   TIME SCREEN — pause-capable timer + manual entry, same as
+   the main app's Today tab.
+   ============================================================ */
+let todayTimerInterval = null;
+function clearTodayTimerInterval(){ if(todayTimerInterval){ clearInterval(todayTimerInterval); todayTimerInterval=null; } }
+function elapsedMsForTimer(timer){
+  if(!timer) return 0;
+  let ms = timer.accumulatedMs||0;
+  if(timer.status==='running' && timer.segmentStartTs) ms += Date.now()-timer.segmentStartTs;
+  return ms;
+}
+function fmtElapsed(ms){ const totalMin=Math.round(ms/60000); const h=Math.floor(totalMin/60), m=totalMin%60; return `${h}h ${String(m).padStart(2,'0')}m`; }
+async function startTimer(){
+  const projectId = document.getElementById('qProject').value;
+  if(!projectId){ showToast('Pick a project first'); return; }
+  const billingType = document.getElementById('qBillingType').value || 'hourly';
+  DB.activeTimer = { projectId, billingType, firstStartClock: nowHHMM(), accumulatedMs:0, segmentStartTs: Date.now(), status:'running', description:'' };
+  setTimeSelect('qStart', DB.activeTimer.firstStartClock);
+  await saveKey(); renderTimeView();
+}
+async function pauseTimer(){
+  const timer=DB.activeTimer; if(!timer||timer.status!=='running') return;
+  timer.accumulatedMs=(timer.accumulatedMs||0)+(Date.now()-timer.segmentStartTs); timer.segmentStartTs=null; timer.status='paused';
+  await saveKey(); renderTimeView();
+}
+async function resumeTimer(){
+  const timer=DB.activeTimer; if(!timer||timer.status!=='paused') return;
+  timer.segmentStartTs=Date.now(); timer.status='running';
+  await saveKey(); renderTimeView();
+}
+async function stopTimer(){
+  const timer=DB.activeTimer; if(!timer) return;
+  const ms=elapsedMsForTimer(timer); const hours=Math.round((ms/3600000)*100)/100;
+  const endClock=nowHHMM(), startClock=timer.firstStartClock;
+  const description = document.getElementById('qDesc') ? document.getElementById('qDesc').value : (timer.description||'');
+  DB.activeTimer=null; await saveKey(); renderTimeView();
+  document.getElementById('qProject').value = timer.projectId;
+  document.getElementById('qProject').dispatchEvent(new Event('change'));
+  setTimeout(()=>{ document.getElementById('qBillingType').value = timer.billingType; }, 0);
+  setTimeSelect('qStart', startClock); setTimeSelect('qEnd', endClock);
+  document.getElementById('qHours').value = hours;
+  document.getElementById('qDesc').value = description;
+  showToast('Timer stopped — review and Save entry');
+}
+
+function renderTimeView(){
+  document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'});
+  const today = todayISO();
+  const todays = DB.timesheet.filter(t=>t.date===today);
+  document.getElementById('todayTotal').textContent = fmtHours(todays.reduce((s,t)=>s+Number(t.hours||0),0));
+
+  const form = document.getElementById('timeForm');
+  const timer = DB.activeTimer;
+  form.innerHTML = `
+    <div class="field"><label>Project</label><select id="qProject" ${timer?'disabled':''}>${projectComboOptionsHtml(timer?timer.projectId:'')}</select></div>
+    <div class="field" id="qBillingWrap" style="display:none;"><label>Billing type</label><select id="qBillingType" ${timer?'disabled':''}></select></div>
+
+    <div class="card" style="background:var(--ink); border:none; padding:16px; margin-bottom:14px;">
+      ${timer ? `
+        <div style="color:#b9c2cc; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">${timer.status==='running'?'Running':'Paused'} — started ${timer.firstStartClock}</div>
+        <div id="timerElapsedDisplay" style="color:#fff; font-family:var(--mono); font-size:26px; font-weight:700; margin:4px 0 12px;">${fmtElapsed(elapsedMsForTimer(timer))}</div>
+        <div style="display:flex; gap:8px;">
+          ${timer.status==='running' ? `<button type="button" class="btn secondary" id="timerPauseBtn" style="flex:1;">⏸ Pause</button>` : `<button type="button" class="btn accent" id="timerResumeBtn" style="flex:1;">▶ Resume</button>`}
+          <button type="button" class="btn" style="flex:1; background:#9b2c2c; border-color:#9b2c2c;" id="timerStopBtn">■ Stop</button>
+        </div>
+        <p class="helptext" style="color:#b9c2cc; margin:10px 0 0;">Pause for a lunch break, then Resume — paused time isn't counted. Notes below are saved as you type, so they're safe even if the timer runs a long time.</p>
+      ` : `
+        <button type="button" class="btn accent" id="timerStartBtn" style="width:100%;">▶ Start timer</button>
+        <p class="helptext" style="color:#b9c2cc; margin:10px 0 0;">Or set Start/End below by hand.</p>
+      `}
+    </div>
+
+    <div class="field"><label>Start (24h)</label>${timeSelectHtml('qStart', timer?timer.firstStartClock:'')}</div>
+    <div class="field"><label>End (24h)</label>${timeSelectHtml('qEnd', '')}</div>
+    <div class="field"><label>Duration (hours)</label><input type="number" id="qHours" min="0" max="24" step="0.25" placeholder="auto from Start/End" ${timer?'disabled':''}></div>
+    <div class="field"><label>Notes</label>
+      <input type="text" id="qDesc" list="qDescList" placeholder="What did you work on?" value="${escapeHtml(timer ? (timer.description||'') : '')}">
+      <datalist id="qDescList">${descriptionOptionsHtml()}</datalist>
+    </div>
+    <button class="btn accent" id="qSaveBtn" style="width:100%;" ${timer?'disabled':''}>${timer?'Stop the timer first':'Save entry'}</button>
+  `;
+
+  if(timer){
+    let notesSaveDebounce = null;
+    document.getElementById('qDesc').addEventListener('input', (e)=>{
+      if(!DB.activeTimer) return;
+      DB.activeTimer.description = e.target.value;
+      clearTimeout(notesSaveDebounce);
+      notesSaveDebounce = setTimeout(()=>{ saveKey(); }, 800);
+    });
+  }
+
+  function qRecalc(){ const s=readTimeSelect('qStart'), e=readTimeSelect('qEnd'); const dur=timeDiffHours(s,e); if(dur!==null) document.getElementById('qHours').value=dur; }
+  function qStartChanged(){ if(DB.activeTimer){ DB.activeTimer.firstStartClock = readTimeSelect('qStart'); saveKey(); } qRecalc(); }
+  wireTimeSelectChange('qStart', qStartChanged);
+  wireTimeSelectChange('qEnd', qRecalc);
+  document.getElementById('qProject').addEventListener('change', updateBillingTypeOptions);
+  updateBillingTypeOptions();
+  function updateBillingTypeOptions(){
+    const project = projectById(document.getElementById('qProject').value);
+    const wrap = document.getElementById('qBillingWrap'), sel = document.getElementById('qBillingType');
+    if(!project){ wrap.style.display='none'; return; }
+    const opts=[];
+    if(project.billingMode!=='fixed'){
+      if(project.rates.hourly) opts.push(`<option value="hourly" ${timer&&timer.billingType==='hourly'?'selected':''}>Hourly</option>`);
+      if(project.rates.daily) opts.push(`<option value="daily" ${timer&&timer.billingType==='daily'?'selected':''}>Daily rate</option>`);
+      if(project.rates.travel) opts.push(`<option value="travel" ${timer&&timer.billingType==='travel'?'selected':''}>Travel / site day</option>`);
+    } else { opts.push('<option value="hourly">Hourly (info only — fixed price)</option>'); }
+    sel.innerHTML = opts.join('') || '<option value="hourly">Hourly</option>';
+    wrap.style.display = opts.length>1 ? 'block' : 'none';
+  }
+
+  if(timer){
+    if(document.getElementById('timerPauseBtn')) document.getElementById('timerPauseBtn').onclick = pauseTimer;
+    if(document.getElementById('timerResumeBtn')) document.getElementById('timerResumeBtn').onclick = resumeTimer;
+    document.getElementById('timerStopBtn').onclick = stopTimer;
+    clearTodayTimerInterval();
+    if(timer.status==='running'){
+      todayTimerInterval = setInterval(()=>{ const el=document.getElementById('timerElapsedDisplay'); if(el && DB.activeTimer) el.textContent = fmtElapsed(elapsedMsForTimer(DB.activeTimer)); }, 1000);
+    }
+  } else {
+    clearTodayTimerInterval();
+    document.getElementById('timerStartBtn').onclick = startTimer;
+  }
+
+  document.getElementById('qSaveBtn').onclick = ()=>{
+    const projectId = document.getElementById('qProject').value;
+    const project = projectById(projectId);
+    if(!project){ showToast('Pick a project'); return; }
+    const billingType = document.getElementById('qBillingType').value || 'hourly';
+    const startTime = readTimeSelect('qStart'), endTime = readTimeSelect('qEnd');
+    const hours = parseFloat(document.getElementById('qHours').value)||0;
+    const description = document.getElementById('qDesc').value.trim();
+    if(hours<=0){ showToast('Enter a Start/End or a duration'); return; }
+    DB.timesheet.push({ id:uid(), date:today, clientId:project.clientId, projectId, billingType, hours, startTime, endTime, description, billingStatus:'unbilled' });
+    saveKey();
+    showToast('Entry saved');
+    renderTimeView();
+  };
+
+  const list = document.getElementById('todayEntries');
+  if(todays.length===0){
+    list.innerHTML = '<div class="empty">Nothing logged yet today.</div>';
+  } else {
+    list.innerHTML = todays.map(t=>{
+      const c=clientById(t.clientId), p=projectById(t.projectId);
+      const calc = calcEntryAmount(t,p);
+      const timeLabel = (t.startTime&&t.endTime) ? `${t.startTime}–${t.endTime} (${fmtHours(t.hours)})` : fmtHours(t.hours);
+      return `<div class="entry-row">
+        <div class="meta"><span>${escapeHtml(c?.name||'—')} / ${escapeHtml(p?.name||'—')}</span><span>${timeLabel}</span></div>
+        <div>${escapeHtml(t.description)||'<span class="helptext">no description</span>'}</div>
+        <div class="amt">${calc.unitLabel} → ${fmtMoney(calc.amount, calc.currency)}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ============================================================
+   EXPENSE SCREEN
+   ============================================================ */
+function renderExpenseView(){
+  const form = document.getElementById('expenseForm');
+  const today = todayISO();
+  form.innerHTML = `
+    <div class="field"><label>Date</label><input type="date" id="exDate" value="${today}"></div>
+    <div class="field"><label>Project</label><select id="exProject">${projectComboOptionsHtml('')}</select></div>
+    <div class="field"><label>Category</label><input type="text" id="exCategory" placeholder="e.g. Flights, Hotel, Materials"></div>
+    <div class="field"><label>Supplier</label><input type="text" id="exSupplier"></div>
+    <div class="field"><label>Billable</label><select id="exBillable"><option value="yes">Billable to client</option><option value="no">Not billable</option></select></div>
+    <div class="field"><label>Original amount</label><input type="number" id="exAmount" step="0.01" min="0"></div>
+    <div class="field"><label>Original currency</label><select id="exCcy">${currencyOptionsHtml('')}</select></div>
+    <div class="field"><label>Exchange rate → invoice currency</label>
+      <div style="display:flex; gap:6px;">
+        <input type="number" id="exRate" step="0.0001" value="1">
+        <button type="button" class="btn secondary small" id="exUseOfficialBtn">Use official rate</button>
+      </div>
+    </div>
+    <div class="field"><label>Bank fee (invoice currency, optional)</label><input type="number" id="exBankFee" step="0.01" min="0" value="0"></div>
+    <div class="field"><label>Description</label><input type="text" id="exDesc"></div>
+    <div class="field"><label>Notes / receipt reference</label><input type="text" id="exNotes" placeholder="e.g. filename of scanned receipt"></div>
+    <button class="btn accent" id="exSaveBtn" style="width:100%;">Save expense</button>
+  `;
+  wireCurrencyAdd(document.getElementById('exCcy'));
+  document.getElementById('exUseOfficialBtn').onclick = ()=>{
+    const date = document.getElementById('exDate').value;
+    const originalCcy = document.getElementById('exCcy').value;
+    const project = projectById(document.getElementById('exProject').value);
+    if(!project){ showToast('Pick a project first, so the invoice currency is known'); return; }
+    const rate = officialCrossRate(originalCcy, project.currency, monthKey(date));
+    if(rate===null){ showToast('No official rate cached for that month — fetch it on the PC Backup tab'); return; }
+    document.getElementById('exRate').value = Math.round(rate*10000)/10000;
+    showToast('Filled from official rate');
+  };
+  document.getElementById('exSaveBtn').onclick = ()=>{
+    const projectId = document.getElementById('exProject').value;
+    const project = projectById(projectId);
+    const originalAmount = parseFloat(document.getElementById('exAmount').value)||0;
+    const originalCurrency = document.getElementById('exCcy').value;
+    const exchangeRate = parseFloat(document.getElementById('exRate').value)||1;
+    const bankFee = parseFloat(document.getElementById('exBankFee').value)||0;
+    if(!project || originalAmount<=0){ showToast('Pick a project and enter an amount'); return; }
+    const invoiceCurrency = project.currency;
+    const convertedAmount = Math.round((originalAmount*exchangeRate + bankFee)*100)/100;
+    const notes = document.getElementById('exNotes').value.trim();
+    DB.expenses.push({
+      id:uid(), date:document.getElementById('exDate').value, clientId:project.clientId, projectId,
+      category:document.getElementById('exCategory').value.trim(),
+      supplier:document.getElementById('exSupplier').value.trim(),
+      billable: document.getElementById('exBillable').value==='yes',
+      originalAmount, originalCurrency, exchangeRate, bankFee, invoiceCurrency, convertedAmount,
+      description: document.getElementById('exDesc').value.trim(),
+      notes, hasReceipt: !!notes, billingStatus:'unbilled'
+    });
+    saveKey();
+    showToast('Expense saved');
+    renderExpenseView();
+  };
+
+  const rows = DB.expenses.filter(e=>e.date===today);
+  const list = document.getElementById('todayExpenses');
+  if(rows.length===0){
+    list.innerHTML = '<div class="empty">No expenses logged today.</div>';
+  } else {
+    list.innerHTML = rows.map(e=>{
+      const p = projectById(e.projectId);
+      return `<div class="entry-row">
+        <div class="meta"><span>${escapeHtml(p?.name||'—')}</span><span>${fmtMoney(e.originalAmount, e.originalCurrency)}</span></div>
+        <div>${escapeHtml(e.category||'')} ${e.description?'— '+escapeHtml(e.description):''}</div>
+        <div class="amt">→ ${fmtMoney(e.convertedAmount, e.invoiceCurrency)}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+async function init(){
+  const gate = document.getElementById('signInGate');
+  const appEl = document.getElementById('app');
+  if(window.cloudStore.status==='signed-out'){
+    gate.style.display = 'flex';
+    appEl.style.display = 'none';
+    document.getElementById('signInBtn').onclick = async ()=>{
+      document.getElementById('signInError').style.display = 'none';
+      try{ await window.cloudStore.signIn(); }
+      catch(e){
+        console.error('sign-in failed', e);
+        const errEl = document.getElementById('signInError');
+        errEl.textContent = 'Sign-in failed: '+(e.message||e.code||'unknown error');
+        errEl.style.display = 'block';
+      }
+    };
+    return;
+  }
+  gate.style.display = 'none';
+  appEl.style.display = '';
+  await loadAll();
+  renderTimeView();
+}
+if(window.cloudStore && window.cloudStore.status!=='connecting'){
+  init();
+} else {
+  window.addEventListener('cloudStoreReady', init);
+}
+</script>
+</body>
+</html>
