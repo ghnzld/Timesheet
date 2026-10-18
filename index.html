@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Log Time & Expenses v7.1-offline — 25 Sep 2026</title>
+<title>Log Time & Expenses v7.2-expense-log — 18 Oct 2026</title>
 <!-- Add to Home Screen support, so this opens as a standalone app and can
      be launched (and, once cached, opened) without going through Safari's
      address bar or needing a live connection. -->
@@ -88,6 +88,13 @@
   .task-card.is-paused .task-elapsed{font-size:14px; margin:3px 0 6px;}
   .task-card .task-notes{padding:8px 10px; font-size:13px; margin-bottom:2px; border-color:#2a3547; background:#141b26; color:#e4e9ef;}
   .task-card .task-notes::placeholder{color:#5c6b80;}
+  .log-switch{display:flex; background:#dde3e9; border-radius:9px; padding:2px; margin:0 0 12px;}
+  .log-switch button{flex:1; border:none; background:transparent; color:var(--ink-soft); padding:9px 6px; font:inherit; font-weight:700; font-size:14px; border-radius:7px;}
+  .log-switch button.active{color:var(--ink); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  .log-totals{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;}
+  .log-totals span{font-family:var(--mono); font-size:13px; font-weight:700; background:var(--warn-bg); color:var(--warn); padding:4px 9px; border-radius:20px;}
+  .entry-row .sub{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
+  .entry-row .flag{font-size:11px; font-weight:700; color:var(--warn); margin-left:6px;}
 </style>
 
 </head>
@@ -123,10 +130,20 @@
     <div class="card"><h3 style="margin:0 0 10px; font-size:13px; text-transform:uppercase; color:var(--ink-soft);">Today's expenses</h3><div id="todayExpenses"></div></div>
   </section>
   <section class="view" id="view-log">
-    <div class="card">
+    <div class="log-switch" id="logSwitch">
+      <button type="button" data-log="time" class="active">Time</button>
+      <button type="button" data-log="expenses">Expenses</button>
+    </div>
+    <div class="card" id="logTimeCard">
       <h3 style="margin:0 0 4px; font-size:13px; text-transform:uppercase; color:var(--ink-soft);">Unbilled timesheet entries</h3>
       <p class="helptext" style="margin:0 0 12px;">Everything not yet billed, across all dates — edit or delete anything here before it goes to the PC.</p>
       <div id="logEntries"></div>
+    </div>
+    <div class="card" id="logExpenseCard" style="display:none;">
+      <h3 style="margin:0 0 4px; font-size:13px; text-transform:uppercase; color:var(--ink-soft);">Unbilled expenses</h3>
+      <p class="helptext" style="margin:0 0 12px;">Everything not yet billed, across all dates — edit or delete anything here before it goes to the PC.</p>
+      <div id="logExpenseTotals"></div>
+      <div id="logExpenses"></div>
     </div>
   </section>
 </main>
@@ -284,7 +301,9 @@ function subscribeToLiveUpdates(){
       const focused = document.activeElement;
       const isTyping = focused && (focused.id==='qDesc' || focused.tagName==='INPUT' || focused.tagName==='SELECT' || focused.tagName==='TEXTAREA');
       if(key==='timesheet' && !isTyping){ renderTimeView(); renderLogView(); }
-      if(key==='expenses' && !isTyping) renderExpenseView();
+      // Lists only — never the form, so a remote change can't wipe an
+      // expense that's half-typed or being edited on this phone.
+      if(key==='expenses'){ renderExpenseLists(); renderLogView(); }
       if(key==='activeTimer'){ normalizeActiveTimers(); if(!isTyping) renderTimeView(); }
     });
   });
@@ -465,7 +484,21 @@ document.getElementById('screens').addEventListener('click', e=>{
   switchToScreen(btn.dataset.view);
 });
 
+// Log tab has its own Time / Expenses switch; remembered for the session.
+let logMode = 'time';
+document.getElementById('logSwitch').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-log]'); if(!btn) return;
+  logMode = btn.dataset.log;
+  renderLogView();
+});
 function renderLogView(){
+  document.querySelectorAll('#logSwitch button').forEach(b=>b.classList.toggle('active', b.dataset.log===logMode));
+  document.getElementById('logTimeCard').style.display = logMode==='time' ? '' : 'none';
+  document.getElementById('logExpenseCard').style.display = logMode==='expenses' ? '' : 'none';
+  renderLogTimeList();
+  renderLogExpenseList();
+}
+function renderLogTimeList(){
   const rows = [...DB.timesheet].filter(t=>t.billingStatus==='unbilled').sort((a,b)=>b.date.localeCompare(a.date));
   const list = document.getElementById('logEntries');
   if(rows.length===0){
@@ -863,29 +896,57 @@ function deleteTodayEntry(id){
 }
 
 /* ============================================================
-   EXPENSE SCREEN
+   EXPENSE SCREEN — new entry, or edit of an existing unbilled one
    ============================================================ */
+let editingExpenseId = null;
+// Shared row renderer for Today's expenses and the Log tab, so both show
+// the same detail and the same Edit/Delete rules (unbilled only).
+function expenseRowHtml(e, showDate){
+  const c = clientById(e.clientId), p = projectById(e.projectId);
+  const canEdit = e.billingStatus==='unbilled';
+  const sameCcy = e.originalCurrency===e.invoiceCurrency && !e.bankFee;
+  const title = [e.category, e.supplier].filter(Boolean).map(escapeHtml).join(' · ') || '<span class="helptext">no category</span>';
+  return `<div class="entry-row">
+    <div class="meta"><span>${showDate?escapeHtml(fmtDateShort(e.date))+' — ':''}${escapeHtml(c?.name||'—')} / ${escapeHtml(p?.name||'—')}</span><span>${fmtMoney(e.originalAmount, e.originalCurrency)}</span></div>
+    <div>${title}${e.billable===false?'<span class="flag">NOT BILLABLE</span>':''}${!e.hasReceipt?'<span class="flag">NO RECEIPT REF</span>':''}</div>
+    ${e.description?`<div class="sub">${escapeHtml(e.description)}</div>`:''}
+    <div class="amt">${sameCcy ? '' : `@ ${(e.exchangeRate??1).toFixed(4)}${e.bankFee?' + fee '+fmtMoney(e.bankFee,e.invoiceCurrency):''} `}→ ${fmtMoney(e.convertedAmount, e.invoiceCurrency)}</div>
+    ${canEdit ? `
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn secondary small" onclick="editExpense('${e.id}')" style="flex:1;">Edit</button>
+        <button class="btn secondary small" onclick="deleteExpense('${e.id}')" style="flex:1;">Delete</button>
+      </div>` : `<div class="helptext" style="margin-top:6px;">${e.billingStatus==='draft'?'In a draft invoice on the PC — locked':'Already billed — locked'}</div>`}
+  </div>`;
+}
 function renderExpenseView(){
   const form = document.getElementById('expenseForm');
-  const today = todayISO();
+  let ex = editingExpenseId ? DB.expenses.find(e=>e.id===editingExpenseId) : null;
+  if(ex && ex.billingStatus!=='unbilled'){ editingExpenseId = null; ex = null; showToast('That expense was billed meanwhile — edit cancelled'); }
+  if(!ex) editingExpenseId = null;
+  const v = ex || { date: todayISO(), billable: true, exchangeRate: 1, bankFee: 0 };
   form.innerHTML = `
-    <div class="field"><label>Date</label><input type="date" id="exDate" value="${today}"></div>
-    <div class="field"><label>Project</label><select id="exProject">${projectComboOptionsHtml('')}</select></div>
-    <div class="field"><label>Category</label><input type="text" id="exCategory" placeholder="e.g. Flights, Hotel, Materials"></div>
-    <div class="field"><label>Supplier</label><input type="text" id="exSupplier"></div>
-    <div class="field"><label>Billable</label><select id="exBillable"><option value="yes">Billable to client</option><option value="no">Not billable</option></select></div>
-    <div class="field"><label>Original amount</label><input type="number" id="exAmount" step="0.01" min="0"></div>
-    <div class="field"><label>Original currency</label><select id="exCcy">${currencyOptionsHtml('')}</select></div>
+    ${ex ? '<p class="helptext" style="color:var(--accent); font-weight:700; margin:0 0 10px;">Editing an existing expense</p>' : ''}
+    <div class="field"><label>Date</label><input type="date" id="exDate" value="${v.date||todayISO()}"></div>
+    <div class="field"><label>Project</label><select id="exProject">${projectComboOptionsHtml(v.projectId||'')}</select></div>
+    <div class="field"><label>Category</label><input type="text" id="exCategory" placeholder="e.g. Flights, Hotel, Materials" value="${escapeHtml(v.category||'')}"></div>
+    <div class="field"><label>Supplier</label><input type="text" id="exSupplier" value="${escapeHtml(v.supplier||'')}"></div>
+    <div class="field"><label>Billable</label><select id="exBillable">
+      <option value="yes" ${v.billable!==false?'selected':''}>Billable to client</option>
+      <option value="no" ${v.billable===false?'selected':''}>Not billable</option>
+    </select></div>
+    <div class="field"><label>Original amount</label><input type="number" id="exAmount" step="0.01" min="0" inputmode="decimal" value="${v.originalAmount??''}"></div>
+    <div class="field"><label>Original currency</label><select id="exCcy">${currencyOptionsHtml(v.originalCurrency||'')}</select></div>
     <div class="field"><label>Exchange rate → invoice currency</label>
       <div style="display:flex; gap:6px;">
-        <input type="number" id="exRate" step="0.0001" value="1">
+        <input type="number" id="exRate" step="0.0001" inputmode="decimal" value="${v.exchangeRate??1}">
         <button type="button" class="btn secondary small" id="exUseOfficialBtn">Use official rate</button>
       </div>
     </div>
-    <div class="field"><label>Bank fee (invoice currency, optional)</label><input type="number" id="exBankFee" step="0.01" min="0" value="0"></div>
-    <div class="field"><label>Description</label><input type="text" id="exDesc"></div>
-    <div class="field"><label>Notes / receipt reference</label><input type="text" id="exNotes" placeholder="e.g. filename of scanned receipt"></div>
-    <button class="btn accent" id="exSaveBtn" style="width:100%;">Save expense</button>
+    <div class="field"><label>Bank fee (invoice currency, optional)</label><input type="number" id="exBankFee" step="0.01" min="0" inputmode="decimal" value="${v.bankFee??0}"></div>
+    <div class="field"><label>Description</label><input type="text" id="exDesc" value="${escapeHtml(v.description||'')}"></div>
+    <div class="field"><label>Notes / receipt reference</label><input type="text" id="exNotes" placeholder="e.g. filename of scanned receipt" value="${escapeHtml(v.notes||'')}"></div>
+    <button class="btn accent" id="exSaveBtn" style="width:100%;">${ex?'Save changes':'Save expense'}</button>
+    ${ex ? '<button class="btn secondary" id="exCancelEditBtn" style="width:100%; margin-top:8px;">Cancel edit</button>' : ''}
   `;
   wireCurrencyAdd(document.getElementById('exCcy'));
   document.getElementById('exUseOfficialBtn').onclick = ()=>{
@@ -898,6 +959,8 @@ function renderExpenseView(){
     document.getElementById('exRate').value = Math.round(rate*10000)/10000;
     showToast('Filled from official rate');
   };
+  const cancelBtn = document.getElementById('exCancelEditBtn');
+  if(cancelBtn) cancelBtn.onclick = ()=>{ editingExpenseId = null; renderExpenseView(); };
   document.getElementById('exSaveBtn').onclick = ()=>{
     const projectId = document.getElementById('exProject').value;
     const project = projectById(projectId);
@@ -906,37 +969,87 @@ function renderExpenseView(){
     const exchangeRate = parseFloat(document.getElementById('exRate').value)||1;
     const bankFee = parseFloat(document.getElementById('exBankFee').value)||0;
     if(!project || originalAmount<=0){ showToast('Pick a project and enter an amount'); return; }
-    const invoiceCurrency = project.currency;
-    const convertedAmount = Math.round((originalAmount*exchangeRate + bankFee)*100)/100;
     const notes = document.getElementById('exNotes').value.trim();
-    DB.expenses.push({
-      id:uid(), date:document.getElementById('exDate').value, clientId:project.clientId, projectId,
-      category:document.getElementById('exCategory').value.trim(),
-      supplier:document.getElementById('exSupplier').value.trim(),
+    const data = {
+      date: document.getElementById('exDate').value || todayISO(), clientId: project.clientId, projectId,
+      category: document.getElementById('exCategory').value.trim(),
+      supplier: document.getElementById('exSupplier').value.trim(),
       billable: document.getElementById('exBillable').value==='yes',
-      originalAmount, originalCurrency, exchangeRate, bankFee, invoiceCurrency, convertedAmount,
+      originalAmount, originalCurrency, exchangeRate, bankFee,
+      invoiceCurrency: project.currency,
+      convertedAmount: Math.round((originalAmount*exchangeRate + bankFee)*100)/100,
       description: document.getElementById('exDesc').value.trim(),
-      notes, hasReceipt: !!notes, billingStatus:'unbilled'
-    });
+      notes, hasReceipt: !!notes
+    };
+    if(editingExpenseId){
+      const idx = DB.expenses.findIndex(e=>e.id===editingExpenseId);
+      // Re-check at save time: the PC may have pulled it into a draft
+      // invoice while this form was open.
+      if(idx<0 || DB.expenses[idx].billingStatus!=='unbilled'){
+        editingExpenseId = null; showToast('That expense was billed or removed meanwhile — not saved'); renderExpenseView(); return;
+      }
+      DB.expenses[idx] = {...DB.expenses[idx], ...data};
+      editingExpenseId = null;
+      showToast('Expense updated');
+    } else {
+      DB.expenses.push({ id:uid(), ...data, billingStatus:'unbilled' });
+      showToast('Expense saved');
+    }
     saveKey();
-    showToast('Expense saved');
     renderExpenseView();
+    renderLogView();
   };
-
-  const rows = DB.expenses.filter(e=>e.date===today);
+  renderExpenseLists();
+}
+function renderExpenseLists(){
   const list = document.getElementById('todayExpenses');
+  const rows = DB.expenses.filter(e=>e.date===todayISO());
+  list.innerHTML = rows.length ? rows.map(e=>expenseRowHtml(e,false)).join('') : '<div class="empty">No expenses logged today.</div>';
+}
+function renderLogExpenseList(){
+  const rows = DB.expenses.filter(e=>e.billingStatus==='unbilled').sort((a,b)=>b.date.localeCompare(a.date) || (b.id||'').localeCompare(a.id||''));
+  const list = document.getElementById('logExpenses'), totalsEl = document.getElementById('logExpenseTotals');
   if(rows.length===0){
-    list.innerHTML = '<div class="empty">No expenses logged today.</div>';
-  } else {
-    list.innerHTML = rows.map(e=>{
-      const p = projectById(e.projectId);
-      return `<div class="entry-row">
-        <div class="meta"><span>${escapeHtml(p?.name||'—')}</span><span>${fmtMoney(e.originalAmount, e.originalCurrency)}</span></div>
-        <div>${escapeHtml(e.category||'')} ${e.description?'— '+escapeHtml(e.description):''}</div>
-        <div class="amt">→ ${fmtMoney(e.convertedAmount, e.invoiceCurrency)}</div>
-      </div>`;
-    }).join('');
+    totalsEl.innerHTML = '';
+    list.innerHTML = '<div class="empty">No unbilled expenses — you\'re all caught up.</div>';
+    return;
   }
+  // Billable totals per invoice currency — what's waiting to go on invoices.
+  const totals = {};
+  rows.filter(e=>e.billable!==false).forEach(e=>{ totals[e.invoiceCurrency] = (totals[e.invoiceCurrency]||0) + (e.convertedAmount||0); });
+  totalsEl.innerHTML = Object.keys(totals).length
+    ? `<div class="log-totals">${Object.entries(totals).map(([ccy,amt])=>`<span>${fmtMoney(amt, ccy)}</span>`).join('')}</div>`
+    : '';
+  list.innerHTML = rows.map(e=>expenseRowHtml(e,true)).join('');
+}
+function editExpense(id){
+  const row = DB.expenses.find(e=>e.id===id);
+  if(!row) return;
+  if(row.billingStatus!=='unbilled'){ showToast('This expense is already billed and can\'t be edited here'); return; }
+  editingExpenseId = id;
+  switchToScreen('expense');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function deleteExpense(id){
+  const row = DB.expenses.find(e=>e.id===id);
+  if(!row) return;
+  if(row.billingStatus!=='unbilled'){ showToast('This expense is already billed and can\'t be deleted here'); return; }
+  openModal(`
+    <h3 style="margin-top:0;">Delete this expense?</h3>
+    <p>${escapeHtml(fmtDateShort(row.date))} — ${escapeHtml(row.category||row.description||'expense')}, ${fmtMoney(row.originalAmount, row.originalCurrency)}</p>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="background:#9b2c2c; border-color:#9b2c2c;" id="confirmDelExBtn">Delete</button>
+    </div>`);
+  document.getElementById('confirmDelExBtn').onclick = ()=>{
+    DB.expenses = DB.expenses.filter(e=>e.id!==id);
+    if(editingExpenseId===id){ editingExpenseId = null; renderExpenseView(); }
+    saveKey();
+    closeModal();
+    showToast('Expense deleted');
+    renderExpenseLists();
+    renderLogView();
+  };
 }
 
 async function init(){
